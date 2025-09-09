@@ -12,7 +12,8 @@
     "plugins": [
       "expo-font",
       "expo-build-properties",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-router"
     ],
     "orientation": "portrait",
     "icon": "./assets/icon.png",

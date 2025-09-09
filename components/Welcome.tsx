@@ -1,10 +1,10 @@
-import { Image, ScrollView, Text, Touchable, TouchableOpacity, View } from "react-native";
+import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { colors } from "theme/colors";
 import Logo from "./Logo";
 import { CustomText } from "./Text";
 import { auth } from "firebaseConfig";
 import { useEffect } from "react";
-import { createUserWithEmailAndPassword, GoogleAuthProvider, sendEmailVerification, signInWithCredential, } from "firebase/auth";
+import {  GoogleAuthProvider,  signInWithCredential, } from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import * as Google from "expo-auth-session/providers/google";
@@ -26,6 +26,8 @@ export default function Welcome() {
       signInWithCredential(auth, credential)
         .then((userCredential) => {
           console.log("Google user:", userCredential.user);
+          alert("Logged in with Google!");
+          alert(JSON.stringify(userCredential.user));
         })
         .catch((err) => console.error("Firebase error:", err));
     }
@@ -37,9 +39,6 @@ export default function Welcome() {
     const storage = AsyncStorage.getAllKeys().then((res) => { console.log("storage", res) }).catch((err) => { console.log(err) });
   }, [auth])
 
-  const handleSignwithGoogle = () => {
-
-  }
   return (
     <ScrollView
       contentContainerClassName="flex-1 justify-center"
@@ -58,9 +57,9 @@ export default function Welcome() {
           <CustomText className="text-white text-center text-[16px]">Sign in with email</CustomText>
         </TouchableOpacity>
         <TouchableOpacity className="bg-white rounded-full py-4 mt-3  flex flex-row gap-3 items-center justify-center"
-        onPress={() => {
-          promptAsync();
-        }}
+          onPress={() => {
+            promptAsync();
+          }}
         >
           <Image source={require("../assets/google.png")} className="h-[23px] w-[23px]" />
           <CustomText className="text-black text-center text-[16px]">Continue With Google</CustomText>
