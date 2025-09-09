@@ -10,7 +10,9 @@
       "tsconfigPaths": true
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      "expo-build-properties",
+      "expo-web-browser"
     ],
     "orientation": "portrait",
     "icon": "./assets/icon.png",

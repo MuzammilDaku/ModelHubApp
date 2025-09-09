@@ -2,8 +2,44 @@ import { Image, ScrollView, Text, Touchable, TouchableOpacity, View } from "reac
 import { colors } from "theme/colors";
 import Logo from "./Logo";
 import { CustomText } from "./Text";
+import { auth } from "firebaseConfig";
+import { useEffect } from "react";
+import { createUserWithEmailAndPassword, GoogleAuthProvider, sendEmailVerification, signInWithCredential, } from "firebase/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+import * as Google from "expo-auth-session/providers/google";
 
 export default function Welcome() {
+
+
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
+  });
+
+  useEffect(() => {
+    if (response?.type === "success") {
+      const { authentication } = response;
+      const credential = GoogleAuthProvider.credential(
+        null,
+        authentication?.accessToken
+      );
+      signInWithCredential(auth, credential)
+        .then((userCredential) => {
+          console.log("Google user:", userCredential.user);
+        })
+        .catch((err) => console.error("Firebase error:", err));
+    }
+  }, [response]);
+
+  useEffect(() => {
+    const user = auth.currentUser;
+    console.log("user", user);
+    const storage = AsyncStorage.getAllKeys().then((res) => { console.log("storage", res) }).catch((err) => { console.log(err) });
+  }, [auth])
+
+  const handleSignwithGoogle = () => {
+
+  }
   return (
     <ScrollView
       contentContainerClassName="flex-1 justify-center"
@@ -21,7 +57,11 @@ export default function Welcome() {
         <TouchableOpacity className="bg-black rounded-full py-4 mt-3 items-center justify-center">
           <CustomText className="text-white text-center text-[16px]">Sign in with email</CustomText>
         </TouchableOpacity>
-        <TouchableOpacity className="bg-white rounded-full py-4 mt-3  flex flex-row gap-3 items-center justify-center">
+        <TouchableOpacity className="bg-white rounded-full py-4 mt-3  flex flex-row gap-3 items-center justify-center"
+        onPress={() => {
+          promptAsync();
+        }}
+        >
           <Image source={require("../assets/google.png")} className="h-[23px] w-[23px]" />
           <CustomText className="text-black text-center text-[16px]">Continue With Google</CustomText>
         </TouchableOpacity>
