@@ -1,13 +1,10 @@
-// firebaseConfig.js
 import { initializeApp, getApps, getApp } from "firebase/app";
 import {
   initializeAuth,
-  getAuth,
   getReactNativePersistence,
 } from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Firebase config
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -18,11 +15,10 @@ const firebaseConfig = {
   measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-// Initialize app (avoid re-initializing on hot reload)
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize auth safely (avoid "already-initialized")
-let auth = initializeAuth(app, {
+// ✅ Always initialize with AsyncStorage for React Native
+const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(AsyncStorage),
 });
 

@@ -2,7 +2,9 @@
   "expo": {
     "name": "ModelHub",
     "slug": "modelhub",
+    "owner": "muzammildaku",
     "version": "1.0.0",
+    "scheme": "modelhub",
     "web": {
       "favicon": "./assets/favicon.png"
     },
@@ -34,7 +36,22 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.muzammildaku.modelhub"
+      "package": "host.exp.exponent",
+      "intentFilters":[
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "modelhub" 
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "extra": {
       "eas": {
