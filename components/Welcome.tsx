@@ -8,7 +8,8 @@ import GoogleLogin from "./GoogleLogin";
 
 
 export default function Welcome() {
-  const [loader, setLoader] = useState(true)
+  const [loader, setLoader] = useState(true);
+  
   useEffect(() => {
     setTimeout(() => {
       setLoader(false)
@@ -35,13 +36,16 @@ export default function Welcome() {
           <TouchableOpacity className="bg-black rounded-full py-4 mt-3 items-center justify-center" onPress={() => router.push('/(auth)/login')}>
             <CustomText className="text-white text-center text-[16px]">Sign in with email</CustomText>
           </TouchableOpacity>
-        
-        <GoogleLogin />
+
+          <GoogleLogin />
         </View>
         <View className="px-12 pt-10 text-center">
           <CustomText className="text-center text-[16px]">By signing in, you agree to our <CustomText className="underline">Terms of Service</CustomText> and <Text className="underline">Privacy Policy</Text></CustomText>
         </View>
-      </ScrollView>}
+      </ScrollView>
+
+
+      }
     </>
   )
 }

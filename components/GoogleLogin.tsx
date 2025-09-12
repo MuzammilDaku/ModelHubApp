@@ -7,7 +7,7 @@ import * as Google from "expo-auth-session/providers/google";
 import { Image, TouchableOpacity } from "react-native";
 
 
-export default function Welcome() {
+export default function GoogleLogin() {
 
     const [request, response, promptAsync] = Google.useAuthRequest({
         androidClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,

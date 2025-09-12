@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
     View,
     FlatList,
@@ -156,7 +156,7 @@ export default function ChatListScreen() {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#4C63D2" />
+            <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
             {/* Header */}
             <View style={styles.header}>
