@@ -1,24 +1,28 @@
 import { auth } from "firebaseConfig";
-import { createUserWithEmailAndPassword, sendEmailVerification, } from "firebase/auth";
-import * as Google from "expo-auth-session/providers/google";
+import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
+import { api } from "server/api";
 
 export class AuthService {
-    constructor() { }
-    signUpWithEmaiLAndPassword(email: string, password: string) {
-        createUserWithEmailAndPassword(auth, email, password)
-            .then((userCredential) => {
-                const user = userCredential.user;
-                console.log(user);
-                sendEmailVerification(user)
-            })
-            .catch((error) => {
-                const errorCode = error.code;
-                const errorMessage = error.message;
-                console.log(errorCode, errorMessage);
-            });
-    }
+  constructor() {}
 
-    signInWithGoogle() {
-        // Implement Google Sign-In logic here
+  async signUpWithEmaiLAndPassword(email: string, password: string) {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      await sendEmailVerification(user);
+
+      if (user?.email) {
+        await api.createUser({
+          email: user.email,
+        });
+      }
+    } catch (error: any) {
+      console.error("Signup failed:", error.code, error.message);
     }
+  }
+
+  signInWithGoogle() {
+    // Implement Google Sign-In logic here
+  }
 }

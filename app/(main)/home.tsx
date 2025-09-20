@@ -16,6 +16,7 @@ import NewChatModal from 'components/Home(Chat)/NewChatModal';
 import ChatList from 'components/Home(Chat)/ChatList';
 import { api } from 'server/api';
 import EmptyChatsState from 'components/Home(Chat)/ChatEmptyState';
+import { useProfileStore } from 'store/profile/store';
 
 export default function ChatListScreen() {
   const [modalVisible, setModalVisible] = useState(false);
@@ -25,15 +26,24 @@ export default function ChatListScreen() {
   const models = useChatStore((state) => state.models);
   const setModels = useChatStore((state) => state.setModels);
   const chats = useChatStore((state) => state.chats);
+  const setChats = useChatStore((state) => state.setChats);
+
+  const user = useProfileStore((state)=>state.user)
 
   useEffect(() => {
-    if (models) return;
     const loadModels = async () => {
+      if (models) return;
       const fetchedModels = await api.getFreeModels();
       if (fetchedModels) {
         setModels(fetchedModels);
       }
     };
+    const loadChats = async () => {
+      if(!user) return ;
+      const fetchChats  = await api.getChats(user?.id)
+      setChats(fetchChats)
+    }
+    loadChats();
     loadModels();
   }, []);
 

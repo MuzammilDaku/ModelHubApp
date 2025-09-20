@@ -12,70 +12,22 @@ import {
   Platform,
   KeyboardAvoidingView,
   Image,
+  ScrollView,
 } from 'react-native';
 import { CustomText } from 'components/Text';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from 'theme/colors';
 import { router } from 'expo-router';
+import { Model, useChatStore } from 'store/chats/store';
 
-const models = [
-  {
-    id: '1',
-    name: 'GPT-4',
-    description: 'Most capable model',
-    icon: 'https://img.icons8.com/color/48/chatgpt.png',
-    color: '#10A37F',
-  },
-  {
-    id: '2',
-    name: 'Claude',
-    description: "Anthropic's AI assistant",
-    icon: 'https://img.icons8.com/color/48/artificial-intelligence.png',
-    color: '#FF6B35',
-  },
-  {
-    id: '3',
-    name: 'Gemini',
-    description: "Google's latest AI",
-    icon: 'https://img.icons8.com/color/48/google-logo.png',
-    color: '#4285F4',
-  },
-  {
-    id: '4',
-    name: 'Llama',
-    description: "Meta's open source model",
-    icon: 'https://img.icons8.com/color/48/meta.png',
-    color: '#0866FF',
-  },
-];
-
-const sampleMessages = [
-  {
-    id: '1',
-    text: 'Hello! How can I help you today?',
-    isUser: false,
-    timestamp: new Date(Date.now() - 10000),
-    model: 'Claude',
-  },
-  {
-    id: '2',
-    text: 'I need help with React Native development',
-    isUser: true,
-    timestamp: new Date(Date.now() - 5000),
-  },
-  {
-    id: '3',
-    text: "I'd be happy to help you with React Native! What specific aspect would you like assistance with? Are you working on navigation, styling, state management, or something else?",
-    isUser: false,
-    timestamp: new Date(),
-    model: 'Claude',
-  },
-];
 
 export default function ChatPage() {
   const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState(sampleMessages);
-  const [selectedModel, setSelectedModel] = useState(models[1]);
+  const messages = useChatStore((state)=>state.selectedChatMessages)
+  const setMessages = useChatStore((state)=>state.addChatMessage)
+  const selectedChat = useChatStore((state)=>state.selectedChat)
+  const models = useChatStore((state)=>state.models)
+  const [selectedModel, setSelectedModel] = useState(models && models.filter((item)=>item?.id == selectedChat?.lastUsedModel)[0]);
   const [modelModalVisible, setModelModalVisible] = useState(false);
   const [scaleAnim] = useState(new Animated.Value(0));
   const flatListRef = useRef<FlatList>(null);
@@ -89,19 +41,19 @@ export default function ChatPage() {
         timestamp: new Date(),
       };
 
-      setMessages((prev) => [...prev, newMessage]);
+      setMessages(newMessage as any);
       setMessage('');
 
       // Simulate AI response
       setTimeout(() => {
         const aiResponse = {
           id: (Date.now() + 1).toString(),
-          text: `This is a response from ${selectedModel.name}. I'm here to help you with your question!`,
+          text: `This is a response from ${selectedModel?.name}. I'm here to help you with your question!`,
           isUser: false,
           timestamp: new Date(),
-          model: selectedModel.name,
+          model: selectedModel?.name,
         };
-        setMessages((prev) => [...prev, aiResponse]);
+        setMessages(aiResponse as any);
       }, 1000);
     }
   };
@@ -127,7 +79,7 @@ export default function ChatPage() {
     });
   };
 
-  const selectModel = (model: (typeof models)[0]) => {
+  const selectModel = (model: Model) => {
     setSelectedModel(model);
     closeModelSelector();
   };
@@ -147,9 +99,9 @@ export default function ChatPage() {
       ]}>
       {!item.isUser && (
         <View style={styles.aiHeader}>
-          <View style={[styles.modelBadge, { backgroundColor: selectedModel.color + '20' }]}>
-            <CustomText style={[styles.modelText, { color: selectedModel.color }]}>
-              {item.model || selectedModel.name}
+          <View style={[styles.modelBadge]}>
+            <CustomText style={[styles.modelText]}>
+              {selectedModel?.name}
             </CustomText>
           </View>
         </View>
@@ -185,13 +137,13 @@ export default function ChatPage() {
         </TouchableOpacity>
 
         <View style={styles.headerContent}>
-          <CustomText style={styles.headerTitle}>AI Chat</CustomText>
+          <CustomText style={styles.headerTitle}>{selectedChat?.name}</CustomText>
           <TouchableOpacity
             onPress={openModelSelector}
             style={styles.modelSelector}
             activeOpacity={0.8}>
-            <Image source={{ uri: selectedModel.icon }} style={styles.modelIcon} />
-            <CustomText style={styles.modelName}>{selectedModel.name}</CustomText>
+            <Image source={{ uri: selectedModel?.icon }} style={styles.modelIcon} />
+            <CustomText style={styles.modelName}>{selectedModel?.name}</CustomText>
             <Ionicons name="chevron-down" size={16} color="#E5E7EB" />
           </TouchableOpacity>
         </View>
@@ -249,7 +201,7 @@ export default function ChatPage() {
         animationType="none"
         onRequestClose={closeModelSelector}>
         <Pressable style={styles.modalOverlay} onPress={closeModelSelector}>
-          <Animated.View style={[styles.modelModal, { transform: [{ scale: scaleAnim }] }]}>
+          <ScrollView style={[styles.modelModal, ]}>
             <View style={styles.modalHeader}>
               <CustomText style={styles.modalTitle}>Select AI Model</CustomText>
               <TouchableOpacity onPress={closeModelSelector}>
@@ -257,26 +209,26 @@ export default function ChatPage() {
               </TouchableOpacity>
             </View>
 
-            {models.map((model, index) => (
+            {models?.map((model, index) => (
               <TouchableOpacity
                 key={model.id}
                 style={[
                   styles.modelOption,
-                  selectedModel.id === model.id && styles.selectedModelOption,
+                  selectedModel?.id === model?.id && styles.selectedModelOption,
                 ]}
                 onPress={() => selectModel(model)}
                 activeOpacity={0.8}>
-                <Image source={{ uri: model.icon }} style={styles.modelOptionIcon} />
+                <Image source={{ uri: model?.icon }} style={styles.modelOptionIcon} />
                 <View style={styles.modelInfo}>
                   <CustomText style={styles.modelOptionName}>{model.name}</CustomText>
-                  <CustomText style={styles.modelOptionDescription}>{model.description}</CustomText>
+                  {/* <CustomText style={styles.modelOptionDescription}>{model?.description}</CustomText> */}
                 </View>
-                {selectedModel.id === model.id && (
-                  <Ionicons name="checkmark-circle" size={24} color={model.color} />
+                {selectedModel?.id === model?.id && (
+                  <Ionicons name="checkmark-circle" size={24}/>
                 )}
               </TouchableOpacity>
             ))}
-          </Animated.View>
+          </ScrollView>
         </Pressable>
       </Modal>
     </KeyboardAvoidingView>

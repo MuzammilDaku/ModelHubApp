@@ -35,50 +35,82 @@ export interface Model {
   icon: string;
 }
 
-
 export interface chat {
-  name:string;
-  id:string;
-  created_by:string;
-  lastUsedModel:Model;
-  lastMessage:string;
-  lastMessageTime:string;
+  name: string;
+  id: string;
+  createdBy: string;
+  lastUsedModel: string;
+  lastMessage: string;
+  lastMessageTime: string;
+}
+
+export interface Message {
+  id?: string;
+  chatId: string;
+  userId: string;
+  content: string;
+  createdAt?: string;
+  updatedAt?: string;
+  messageType: string;
 }
 
 interface chatStore {
-  selectedChat:chat | null;
-  models:Model[] | null;
-  selectedModel:Model | null
-  chats:chat[] | null
+  selectedChat: chat | null;
+  models: Model[] | null;
+  selectedModel: Model | null;
+  chats: chat[] | null;
+  selectedChatMessages: Message[] | null;
 }
 
 interface chatStoreActions {
-  setModels: (models:Model[]) => void;
-  setSelectedModel:(model:Model) => void;
+  setModels: (models: Model[]) => void;
+  addChat: (chat: chat) => void;
+  setSelectedModel: (model: Model) => void;
+  setChats: (chats: chat[]) => void;
+  setSelectedChat: (chat: chat) => void;
+  setSelectedChatMessages: (message: Message[]) => void;
+  addChatMessage: (message: Message) => void;
 }
 interface ChatStore extends chatStore, chatStoreActions {}
 
 const initialState: chatStore = {
-  selectedChat:null,
-  models:null,
-  selectedModel:null,
-  chats:null
+  selectedChat: null,
+  models: null,
+  selectedModel: null,
+  chats: null,
+  selectedChatMessages: null,
 };
 
 export const useChatStore = create<ChatStore>()(
   persist(
     (set, get) => ({
       ...initialState,
-      setModels:(models) => {
-        set({models:models})
+      setModels: (models) => {
+        set({ models: models });
       },
-      setSelectedModel:(model) => {
-        set({selectedModel:model})
-      }
-      
+      setSelectedModel: (model) => {
+        set({ selectedModel: model });
+      },
+      addChat(chat) {
+        set({ chats: [...(get().chats ?? []), chat] });
+      },
+      setChats(chats) {
+        set({ chats });
+      },
+      setSelectedChat(chat) {
+        set({ selectedChat: chat });
+      },
+      setSelectedChatMessages(messages) {
+        set({ selectedChatMessages: messages });
+      },
+      addChatMessage: (message) => {
+        set({
+          selectedChatMessages: [...(get().selectedChatMessages ?? []), message],
+        });
+      },
     }),
     {
-      name: 'user-storage',
+      name: 'chat-storage',
       storage: createJSONStorage(() => AsyncStorage),
     }
   )

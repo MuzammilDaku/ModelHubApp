@@ -9,10 +9,13 @@ import {
   ScrollView,
   Image,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CustomText } from 'components/Text';
-import { Model } from 'store/chats/store';
+import { Model, useChatStore } from 'store/chats/store';
+import { api } from 'server/api';
+import { useProfileStore } from 'store/profile/store';
 
 export default function NewChatModal({
   newChatModalVisible,
@@ -26,29 +29,29 @@ export default function NewChatModal({
   models: Model[] | null;
 }) {
   const [newChatName, setNewChatName] = useState('');
-  const [selectedModel, setSelectedModel] = useState((models ?? [])[0]);
+  const [selectedModel, setSelectedModel] = useState<Model>((models ?? [])[0]);
 
-  const createNewChat = () => {
-    if (newChatName.trim()) {
-      const newChat = {
-        id: Date.now().toString(),
-        name: newChatName.trim(),
-        lastMessage: 'Start a new conversation...',
-        date: new Date().toISOString().split('T')[0],
-        time: new Date().toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-        avatar: selectedModel?.icon,
-        unread: 0,
-        online: true,
-        model: selectedModel?.name,
-      };
+  const user = useProfileStore((state) => state.user);
+  const addChat = useChatStore((state) => state.addChat);
 
-      // setChats((prev) => [newChat, ...prev]);
+  // console.log(user)
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const createNewChat = async () => {
+    // console.log(user)
+    if (!user) return;
+    try {
+      setIsLoading(true);
+      const chat = await api.createChat({
+        name: newChatName,
+        lastUsedModel: selectedModel.id,
+        createdBy: user.id,
+      });
+      addChat(chat);
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setIsLoading(false);
       closeNewChatModal();
-
-      // router.push(`/chat`);
     }
   };
 
@@ -121,13 +124,13 @@ export default function NewChatModal({
               style={[styles.createButton, !newChatName.trim() && styles.createButtonDisabled]}
               onPress={createNewChat}
               activeOpacity={0.8}
-              disabled={!newChatName.trim()}>
+              disabled={!newChatName.trim() || !selectedModel || isLoading}>
               <CustomText
                 style={[
                   styles.createButtonText,
                   !newChatName.trim() && styles.createButtonTextDisabled,
                 ]}>
-                Create Chat
+                {isLoading ? <ActivityIndicator color={'#fefefe'} /> : 'Create Chat'}
               </CustomText>
             </TouchableOpacity>
           </View>

@@ -1,26 +1,20 @@
-import { ActivityIndicator, Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { colors } from "theme/colors";
 import Logo from "./Logo";
 import { CustomText } from "./Text";
-import { useEffect, useState } from "react";
 import { useRouter } from 'expo-router';
 import GoogleLogin from "./GoogleLogin";
+import { useProfileStore } from "store/profile/store";
 
 
 export default function Welcome() {
-  const [loader, setLoader] = useState(true);
-  
-  useEffect(() => {
-    setTimeout(() => {
-      setLoader(false)
-    }, 1000);
-  }, [])
-
+  const appLoading = useProfileStore((state)=>state.appLoading)
   const router = useRouter();
+  console.log(appLoading)
   return (
     <>
-      {loader && <ActivityIndicator size="large" color="#0000ff" style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, zIndex: 9999 }} />}
-      {!loader && <ScrollView
+      {appLoading && <ActivityIndicator size="large" color="#0000ff" style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, zIndex: 9999 }} />}
+      {!appLoading && <ScrollView
         contentContainerClassName="flex-1 justify-center"
         style={{ backgroundColor: colors.background }}
       >
@@ -43,8 +37,6 @@ export default function Welcome() {
           <CustomText className="text-center text-[16px]">By signing in, you agree to our <CustomText className="underline">Terms of Service</CustomText> and <Text className="underline">Privacy Policy</Text></CustomText>
         </View>
       </ScrollView>
-
-
       }
     </>
   )
