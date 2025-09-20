@@ -21,7 +21,6 @@ export default function Signup() {
     try {
       setIsLoading(true);
       const res = await createUserWithEmailAndPassword(auth, email, password)
-      console.log(res);
       router.push('/(auth)/verify-email');
     }
     catch (error: { code?: string } | any) {

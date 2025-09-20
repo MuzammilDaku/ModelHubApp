@@ -1,12 +1,42 @@
 import { useRouter } from 'expo-router';
 import { FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { chat } from 'store/chats/store';
+import { chat, useChatStore } from 'store/chats/store';
 import { CustomText } from 'components/Text';
 import { colors } from 'theme/colors';
 
 const formatTime = (time: string) => {
-  return time;
+  if (!time) return '';
+
+  const date = new Date(time);
+  const now = new Date();
+
+  // If it's today, show time like "12:45 PM"
+  if (
+    date.getDate() === now.getDate() &&
+    date.getMonth() === now.getMonth() &&
+    date.getFullYear() === now.getFullYear()
+  ) {
+    return date.toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  // If it's this year, show like "Sep 20"
+  if (date.getFullYear() === now.getFullYear()) {
+    return date.toLocaleDateString([], {
+      month: 'short',
+      day: 'numeric',
+    });
+  }
+
+  // Otherwise show "Sep 20, 2024"
+  return date.toLocaleDateString([], {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
 };
 
 export default function ChatList({
@@ -17,13 +47,14 @@ export default function ChatList({
   openOptions: (id: string) => void;
 }) {
   const router = useRouter();
-
+  const setSelectedChat = useChatStore((state)=>state.setSelectedChat)
   const renderItem = ({ item, index }: { item: any; index: number }) => (
     <View style={styles.chatItem} key={index}>
       <TouchableOpacity
         style={styles.chatContent}
         activeOpacity={0.8}
         onPress={() => {
+          setSelectedChat(item)
           router.push(`/chat`);
         }}>
         <View style={styles.avatarContainer}>
@@ -32,13 +63,11 @@ export default function ChatList({
         <View style={styles.chatInfo}>
           <View style={styles.nameRow}>
             <CustomText style={styles.chatName}>{item?.name}</CustomText>
-            <CustomText style={styles.time}>
-              {formatTime(item?.lastMessageTime)}
-            </CustomText>
+            <CustomText style={styles.time}>{formatTime(item?.lastMessageTime)}</CustomText>
           </View>
           <View style={styles.messageRow}>
             <CustomText style={styles.lastMessage} numberOfLines={1}>
-              {item?.lastMessage}
+              {item?.lastMessage ?? 'Click on this to chat'}
             </CustomText>
           </View>
         </View>
@@ -140,7 +169,7 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     justifyContent: 'center',
-    alignItems: 'center',   
+    alignItems: 'center',
     backgroundColor: '#F8FAFC',
     marginLeft: 8,
   },
