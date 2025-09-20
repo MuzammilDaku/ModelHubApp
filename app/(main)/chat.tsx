@@ -85,10 +85,13 @@ export default function ChatPage() {
   };
 
   const formatTime = (timestamp: Date) => {
-    return timestamp.toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    if(timestamp) {
+      return new Date(timestamp).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    }
+    return 'Null'
   };
 
   const renderMessage = ({ item, index }: { item: any; index: number }) => (
@@ -116,7 +119,7 @@ export default function ChatPage() {
 
       <CustomText
         style={[styles.timestamp, item.isUser ? styles.userTimestamp : styles.aiTimestamp]}>
-        {formatTime(item.timestamp)}
+        {formatTime(item?.timestamp)}
       </CustomText>
     </View>
   );
