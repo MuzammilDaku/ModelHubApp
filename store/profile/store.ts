@@ -28,7 +28,7 @@ export const useProfileStore = create<ProfileStore>()(
             setUser: (user) => set({ user }),
         }),
         {
-            name: 'food-storage',
+            name: 'user-storage',
             storage: createJSONStorage(() => AsyncStorage),
         },
     ),
