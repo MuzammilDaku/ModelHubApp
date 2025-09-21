@@ -35,14 +35,15 @@ export default function ChatPage() {
   const selectedChat = useChatStore((state) => state.selectedChat);
   const models = useChatStore((state) => state.models);
   const [selectedModel, setSelectedModel] = useState(
-    models && models.filter((item) => item?.id == selectedChat?.lastUsedModel)[0]
+    models?.find((item) => item.id === selectedChat?.lastUsedModel) || null
   );
+
   const [modelModalVisible, setModelModalVisible] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [scaleAnim] = useState(new Animated.Value(0));
   const flatListRef = useRef<FlatList>(null);
 
-useEffect(() => {
+  useEffect(() => {
     const loadChat = async () => {
       const messages = await api.getMessages(selectedChat?.id as string);
       setMessages(messages);
@@ -56,9 +57,9 @@ useEffect(() => {
 
   // Add this UUID generator function at the top of your file or in a utils file
   const generateUUID = () => {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0;
-      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
       return v.toString(16);
     });
   };
@@ -80,10 +81,7 @@ useEffect(() => {
           Animated.timing(dot3, { toValue: 0, duration: 400, useNativeDriver: true }),
         ];
 
-        Animated.loop(
-          Animated.stagger(200, animationSequence),
-          { iterations: -1 }
-        ).start();
+        Animated.loop(Animated.stagger(200, animationSequence), { iterations: -1 }).start();
       };
 
       animateDots();
@@ -99,20 +97,15 @@ useEffect(() => {
   };
 
   const sendMessage = async () => {
-    if (!message.trim() || isLoading) {
-      return;
-    }
-    
-    if (!selectedChat || !selectedModel || !user) {
-      return;
-    }
+    if (!message.trim() || isLoading) return;
+    if (!selectedChat || !selectedModel || !user) return;
 
     try {
-      const userMessage = message.trim();    
-      setMessage('');    
+      const userMessage = message.trim();
+      setMessage('');
       setIsLoading(true);
-      
-      // Include createdAt timestamp for user message
+
+      // ─── User Message ───────────────────────────────
       const userMessageObj = {
         id: generateUUID(),
         text: userMessage,
@@ -124,18 +117,16 @@ useEffect(() => {
         createdAt: new Date().toISOString(),
       };
 
-      // Add user message to UI immediately
       addChatMessage(userMessageObj);
 
-      // Scroll to bottom
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
 
-      // Prepare messages for API - only send last 20 messages for context
+      // ─── Prepare API Messages (last 20) ─────────────
       const apiMessages = messages
         ?.concat([userMessageObj])
-        .slice(-20) // Take only the last 20 messages
+        .slice(-20)
         .map((msg) => ({
           role: msg.messageType === 'user' ? 'user' : 'assistant',
           content: msg.content,
@@ -152,56 +143,57 @@ useEffect(() => {
 
       let assistantMessageId: any = null;
       let accumulatedText = '';
+      let assistantMessageCreated = false; // 🟢 Prevent duplicates
       let eventSource: any = null;
-      
-      // Create EventSource connection with POST data using react-native-sse
+
+      // ─── Open SSE ──────────────────────────────────
       eventSource = new EventSource(`${apiUrl}/chat/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'ngrok-skip-browser-warning': 'true',
-          'Accept': 'text/event-stream',
+          Accept: 'text/event-stream',
           'Cache-Control': 'no-cache',
         },
         body: JSON.stringify(requestBody),
       });
 
-      // Handle message_id events
+      // ─── message_id Event ──────────────────────────
       eventSource.addEventListener('message_id', (event: any) => {
         try {
           const data = JSON.parse(event.data);
-          
-          assistantMessageId = data.messageId;
-          
-          // Include createdAt timestamp for assistant message
-          const assistantMessageObj = {
-            id: assistantMessageId,
-            text: '',
-            content: '',
-            messageType: 'assistant',
-            chatId: selectedChat?.id,
-            model: selectedModel?.id,
-            userId: user.id,
-            createdAt: new Date().toISOString(),
-          };
-          
-          addChatMessage(assistantMessageObj);
+
+          if (!assistantMessageCreated) {
+            assistantMessageId = data.messageId;
+
+            const assistantMessageObj = {
+              id: assistantMessageId,
+              text: '',
+              content: '', // start empty (typing animation can show here)
+              messageType: 'assistant',
+              chatId: selectedChat?.id,
+              model: selectedModel?.id,
+              userId: user.id,
+              createdAt: new Date().toISOString(),
+            };
+
+            addChatMessage(assistantMessageObj);
+            assistantMessageCreated = true; // 🟢 Only once
+          }
         } catch (parseError) {
           console.error('Error parsing message_id:', parseError);
         }
       });
 
-      // Handle content events
+      // ─── content Event ─────────────────────────────
       eventSource.addEventListener('content', (event: any) => {
         try {
           const data = JSON.parse(event.data);
-          
+
           if (assistantMessageId && data.content) {
             accumulatedText += data.content;
-            
-            updateMessage(assistantMessageId, {
-              content: accumulatedText,
-            });
+
+            updateMessage(assistantMessageId, { content: accumulatedText });
 
             setTimeout(() => {
               flatListRef.current?.scrollToEnd({ animated: true });
@@ -212,81 +204,27 @@ useEffect(() => {
         }
       });
 
-      // Handle completion
-      eventSource.addEventListener('complete', (event: any) => {
+      // ─── complete Event ────────────────────────────
+      eventSource.addEventListener('complete', () => {
         eventSource.close();
         setIsLoading(false);
       });
 
-      // Handle default message events (fallback)
-      eventSource.addEventListener('message', (event: any) => {
-        try {
-          const data = JSON.parse(event.data);
-          
-          switch (data.type) {
-            case 'message_id':
-              assistantMessageId = data.messageId;
-              
-              // Include createdAt timestamp for assistant message (fallback)
-              const assistantMessageObj = {
-                id: assistantMessageId,
-                text: '',
-                content: '',
-                messageType: 'assistant',
-                chatId: selectedChat?.id,
-                model: selectedModel?.id,
-                userId: user.id,
-                createdAt: new Date().toISOString(),
-              };
-              
-              addChatMessage(assistantMessageObj);
-              break;
-              
-            case 'content':
-              if (assistantMessageId && data.content) {
-                accumulatedText += data.content;
-                
-                updateMessage(assistantMessageId, {
-                  content: accumulatedText,
-                });
-
-                setTimeout(() => {
-                  flatListRef.current?.scrollToEnd({ animated: true });
-                }, 50);
-              }
-              break;
-              
-            case 'complete':
-              eventSource.close();
-              setIsLoading(false);
-              break;
-              
-            case 'error':
-              throw new Error(data.message || 'API error occurred');
-          }
-        } catch (parseError) {
-          console.error('Error parsing message:', parseError);
-        }
-      });
-
-      // Handle errors
+      // ─── error Event ───────────────────────────────
       eventSource.addEventListener('error', (event: any) => {
         console.error('SSE error:', event);
-        
-        if (eventSource) {
-          eventSource.close();
-        }
-        
+        if (eventSource) eventSource.close();
+
         if (assistantMessageId) {
           updateMessage(assistantMessageId, {
-            content: 'Sorry, I encountered an error. Please try again.',
+            content:
+              accumulatedText || '⚠️ Sorry, I encountered an error. Please try another model.',
           });
         } else {
-          // Include createdAt timestamp for error message
           const errorMessageObj = {
             id: generateUUID(),
-            text: 'Sorry, I encountered an error. Please try again.',
-            content: 'Sorry, I encountered an error. Please try again.',
+            text: '⚠️ Sorry, I encountered an error. Please try another model.',
+            content: '⚠️ Sorry, I encountered an error. Please try another model.',
             messageType: 'assistant',
             chatId: selectedChat?.id,
             model: selectedModel?.id,
@@ -296,39 +234,36 @@ useEffect(() => {
           };
           addChatMessage(errorMessageObj);
         }
-        
+
         setIsLoading(false);
       });
 
-      // Set a timeout as fallback
+      // ─── Timeout Safeguard ─────────────────────────
       const timeout = setTimeout(() => {
         if (eventSource) {
           eventSource.close();
-          
           if (assistantMessageId) {
             updateMessage(assistantMessageId, {
-              content: accumulatedText || 'Response timeout. Please try again.',
+              content: accumulatedText || '⚠️ Response timeout. Please try again.',
             });
           }
           setIsLoading(false);
         }
       }, 60000);
 
-      // Clean up timeout when stream completes
+      // Cleanup
       const originalClose = eventSource.close;
-      eventSource.close = function() {
+      eventSource.close = function () {
         clearTimeout(timeout);
         originalClose.call(this);
       };
-
     } catch (error: any) {
       console.error('Error in sendMessage:', error);
-      
-      // Include createdAt timestamp for error message
+
       const errorMessageObj = {
         id: generateUUID(),
-        text: 'Sorry, I encountered an error. Please try again.',
-        content: 'Sorry, I encountered an error. Please try again.',
+        text: '⚠️ Sorry, I encountered an error. Please try another model.',
+        content: '⚠️ Sorry, I encountered an error. Please try another model.',
         messageType: 'assistant',
         chatId: selectedChat?.id,
         model: selectedModel?.id,
@@ -337,12 +272,8 @@ useEffect(() => {
         createdAt: new Date().toISOString(),
       };
       addChatMessage(errorMessageObj);
-      
-      Alert.alert(
-        'Error',
-        `Failed to send message: ${error.message}`,
-        [{ text: 'OK' }]
-      );
+
+      Alert.alert('Error', `Failed to send message: ${error.message}`, [{ text: 'OK' }]);
       setIsLoading(false);
     }
   };
@@ -391,35 +322,25 @@ useEffect(() => {
         style={[
           styles.messageContainer,
           isUser ? styles.userMessageContainer : styles.aiMessageContainer,
-        ]}
-      >
+        ]}>
         {!isUser && (
           <View style={styles.aiHeader}>
             <View style={styles.aiAvatarContainer}>
-              <Image 
-                source={{ uri: selectedModel?.icon }} 
+              <Image
+                source={{ uri: models?.find((data) => data.id === item.model)?.icon || undefined }}
                 style={styles.aiAvatar}
               />
             </View>
             <View style={styles.modelBadge}>
-              <CustomText style={styles.modelText}>
-                {selectedModel?.name}
-              </CustomText>
+              <CustomText style={styles.modelText}>{item?.model}</CustomText>
             </View>
           </View>
         )}
 
-        <View style={[
-          styles.messageBubble, 
-          isUser ? styles.userMessage : styles.aiMessage
-        ]}>
+        <View style={[styles.messageBubble, isUser ? styles.userMessage : styles.aiMessage]}>
           {item.content ? (
             <CustomText
-              style={[
-                styles.messageText, 
-                isUser ? styles.userMessageText : styles.aiMessageText
-              ]}
-            >
+              style={[styles.messageText, isUser ? styles.userMessageText : styles.aiMessageText]}>
               {item.content}
             </CustomText>
           ) : !isUser && !item.error ? (
@@ -427,20 +348,14 @@ useEffect(() => {
           ) : null}
         </View>
 
-        <View style={[
-          styles.messageFooter,
-          isUser ? styles.userMessageFooter : styles.aiMessageFooter
-        ]}>
-          <CustomText style={styles.timestamp}>
-            {formatTime(item?.createdAt)}
-          </CustomText>
+        <View
+          style={[
+            styles.messageFooter,
+            isUser ? styles.userMessageFooter : styles.aiMessageFooter,
+          ]}>
+          <CustomText style={styles.timestamp}>{formatTime(item?.createdAt)}</CustomText>
           {isUser && (
-            <Ionicons 
-              name="checkmark-done" 
-              size={16} 
-              color="#4C63D2" 
-              style={styles.readStatus}
-            />
+            <Ionicons name="checkmark-done" size={16} color="#4C63D2" style={styles.readStatus} />
           )}
         </View>
       </View>
@@ -450,8 +365,7 @@ useEffect(() => {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <StatusBar barStyle="light-content" backgroundColor="#1F2937" />
 
       {/* Header */}
@@ -459,8 +373,7 @@ useEffect(() => {
         <TouchableOpacity
           onPress={() => router.back()}
           style={styles.backButton}
-          activeOpacity={0.8}
-        >
+          activeOpacity={0.8}>
           <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
 
@@ -469,8 +382,7 @@ useEffect(() => {
           <TouchableOpacity
             onPress={openModelSelector}
             style={styles.modelSelector}
-            activeOpacity={0.8}
-          >
+            activeOpacity={0.8}>
             <Image source={{ uri: selectedModel?.icon }} style={styles.modelIcon} />
             <CustomText style={styles.modelName}>{selectedModel?.name}</CustomText>
             <Ionicons name="chevron-down" size={16} color="#E5E7EB" />
@@ -504,40 +416,36 @@ useEffect(() => {
             <CustomText style={styles.emptyStateSubtitle}>
               Ask me anything! I'm here to help with questions, creative tasks, analysis, and more.
             </CustomText>
-            
+
             <View style={styles.suggestionsContainer}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.suggestionChip}
-                onPress={() => setMessage("What can you help me with?")}
-                activeOpacity={0.7}
-              >
+                onPress={() => setMessage('What can you help me with?')}
+                activeOpacity={0.7}>
                 <Ionicons name="help-circle-outline" size={18} color="#4C63D2" />
                 <CustomText style={styles.suggestionText}>What can you help me with?</CustomText>
               </TouchableOpacity>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={styles.suggestionChip}
-                onPress={() => setMessage("Write a creative story")}
-                activeOpacity={0.7}
-              >
+                onPress={() => setMessage('Write a creative story')}
+                activeOpacity={0.7}>
                 <Ionicons name="create-outline" size={18} color="#4C63D2" />
                 <CustomText style={styles.suggestionText}>Write a creative story</CustomText>
               </TouchableOpacity>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={styles.suggestionChip}
-                onPress={() => setMessage("Explain a complex topic")}
-                activeOpacity={0.7}
-              >
+                onPress={() => setMessage('Explain a complex topic')}
+                activeOpacity={0.7}>
                 <Ionicons name="school-outline" size={18} color="#4C63D2" />
                 <CustomText style={styles.suggestionText}>Explain a complex topic</CustomText>
               </TouchableOpacity>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={styles.suggestionChip}
-                onPress={() => setMessage("Help me brainstorm ideas")}
-                activeOpacity={0.7}
-              >
+                onPress={() => setMessage('Help me brainstorm ideas')}
+                activeOpacity={0.7}>
                 <Ionicons name="bulb-outline" size={18} color="#4C63D2" />
                 <CustomText style={styles.suggestionText}>Help me brainstorm ideas</CustomText>
               </TouchableOpacity>
@@ -575,18 +483,13 @@ useEffect(() => {
               },
             ]}
             activeOpacity={0.8}
-            disabled={!message?.trim() || isLoading}
-          >
+            disabled={!message?.trim() || isLoading}>
             {isLoading ? (
               <Animated.View style={styles.loadingSpinner}>
                 <Ionicons name="ellipsis-horizontal" size={20} color="#9CA3AF" />
               </Animated.View>
             ) : (
-              <Ionicons
-                name="send"
-                size={20}
-                color={message?.trim() ? '#FFFFFF' : '#9CA3AF'}
-              />
+              <Ionicons name="send" size={20} color={message?.trim() ? '#FFFFFF' : '#9CA3AF'} />
             )}
           </TouchableOpacity>
         </View>
@@ -597,8 +500,7 @@ useEffect(() => {
         visible={modelModalVisible}
         transparent
         animationType="none"
-        onRequestClose={closeModelSelector}
-      >
+        onRequestClose={closeModelSelector}>
         <Pressable style={styles.modalOverlay} onPress={closeModelSelector}>
           <ScrollView style={[styles.modelModal]}>
             <View style={styles.modalHeader}>
@@ -616,8 +518,7 @@ useEffect(() => {
                   selectedModel?.id === model?.id && styles.selectedModelOption,
                 ]}
                 onPress={() => selectModel(model)}
-                activeOpacity={0.8}
-              >
+                activeOpacity={0.8}>
                 <Image source={{ uri: model?.icon }} style={styles.modelOptionIcon} />
                 <View style={styles.modelInfo}>
                   <CustomText style={styles.modelOptionName}>{model.name}</CustomText>
