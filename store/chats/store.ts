@@ -45,7 +45,7 @@ export interface chat {
 }
 
 export interface Message {
-  id?: string;
+  id: string;
   chatId: string;
   userId: string;
   content: string;
@@ -70,7 +70,9 @@ interface chatStoreActions {
   setSelectedChat: (chat: chat) => void;
   setSelectedChatMessages: (message: Message[]) => void;
   addChatMessage: (message: Message) => void;
+  updateMessage: (messageId: string, updates: Partial<Message>) => void;
 }
+
 interface ChatStore extends chatStore, chatStoreActions {}
 
 const initialState: chatStore = {
@@ -104,9 +106,22 @@ export const useChatStore = create<ChatStore>()(
         set({ selectedChatMessages: messages });
       },
       addChatMessage: (message) => {
+        console.log(message)
         set({
           selectedChatMessages: [...(get().selectedChatMessages ?? []), message],
         });
+      },
+      updateMessage: (messageId, updates) => {
+        const currentMessages = get().selectedChatMessages;
+        if (!currentMessages) return;
+
+        const updatedMessages = currentMessages.map((message) =>
+          message.id === messageId
+            ? { ...message, ...updates }
+            : message
+        );
+
+        set({ selectedChatMessages: updatedMessages });
       },
     }),
     {

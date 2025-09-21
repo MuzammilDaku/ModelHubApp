@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+export const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 
 export const API = axios.create({
   baseURL: apiUrl,
@@ -46,7 +46,10 @@ const getChats = async (id:string) => {
 }
 
 
-// const sendMessage = async
+const getMessages = async (id:string) => {
+  const response = await API.get(`/chat/messages?id=${id}`)
+  return response.data;
+}
 
 
-export const api = { getFreeModels, createChat ,createUser,getUser,getChats};
+export const api = { getFreeModels, createChat ,createUser,getUser,getChats,getMessages};

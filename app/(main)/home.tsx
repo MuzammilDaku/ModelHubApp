@@ -111,7 +111,7 @@ export default function ChatListScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
+      <StatusBar barStyle="light-content" backgroundColor="F8FAFC" />
       <Header />
 
       {chats && chats.length > 0 ? (
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: 'black',
+    backgroundColor: '#1F2937',
     justifyContent: 'center',
     alignItems: 'center',
   },

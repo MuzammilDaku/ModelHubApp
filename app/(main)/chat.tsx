@@ -1,4 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import EventSource from 'react-native-sse';
+
 import {
   View,
   FlatList,
@@ -13,48 +15,335 @@ import {
   KeyboardAvoidingView,
   Image,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { CustomText } from 'components/Text';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from 'theme/colors';
 import { router } from 'expo-router';
 import { Model, useChatStore } from 'store/chats/store';
-
+import { api, apiUrl } from 'server/api';
+import { useProfileStore } from 'store/profile/store';
 
 export default function ChatPage() {
   const [message, setMessage] = useState('');
-  const messages = useChatStore((state)=>state.selectedChatMessages)
-  const setMessages = useChatStore((state)=>state.addChatMessage)
-  const selectedChat = useChatStore((state)=>state.selectedChat)
-  const models = useChatStore((state)=>state.models)
-  const [selectedModel, setSelectedModel] = useState(models && models.filter((item)=>item?.id == selectedChat?.lastUsedModel)[0]);
+  const [isLoading, setIsLoading] = useState(false);
+  const messages = useChatStore((state) => state.selectedChatMessages);
+  const setMessages = useChatStore((state) => state.setSelectedChatMessages);
+  const addChatMessage = useChatStore((state) => state.addChatMessage);
+  const updateMessage = useChatStore((state) => state.updateMessage);
+  const selectedChat = useChatStore((state) => state.selectedChat);
+  const models = useChatStore((state) => state.models);
+  const [selectedModel, setSelectedModel] = useState(
+    models && models.filter((item) => item?.id == selectedChat?.lastUsedModel)[0]
+  );
   const [modelModalVisible, setModelModalVisible] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
   const [scaleAnim] = useState(new Animated.Value(0));
   const flatListRef = useRef<FlatList>(null);
 
-  const sendMessage = () => {
-    if (message.trim()) {
-      const newMessage = {
-        id: Date.now().toString(),
-        text: message,
-        isUser: true,
-        timestamp: new Date(),
+useEffect(() => {
+    const loadChat = async () => {
+      const messages = await api.getMessages(selectedChat?.id as string);
+      setMessages(messages);
+      setMessage('');
+      setIsLoading(false);
+    };
+    loadChat();
+  }, [selectedChat]);
+
+  const user = useProfileStore((state) => state.user);
+
+  // Add this UUID generator function at the top of your file or in a utils file
+  const generateUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
+  // Typing animation component
+  const TypingIndicator = () => {
+    const dot1 = useRef(new Animated.Value(0)).current;
+    const dot2 = useRef(new Animated.Value(0)).current;
+    const dot3 = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+      const animateDots = () => {
+        const animationSequence = [
+          Animated.timing(dot1, { toValue: 1, duration: 400, useNativeDriver: true }),
+          Animated.timing(dot2, { toValue: 1, duration: 400, useNativeDriver: true }),
+          Animated.timing(dot3, { toValue: 1, duration: 400, useNativeDriver: true }),
+          Animated.timing(dot1, { toValue: 0, duration: 400, useNativeDriver: true }),
+          Animated.timing(dot2, { toValue: 0, duration: 400, useNativeDriver: true }),
+          Animated.timing(dot3, { toValue: 0, duration: 400, useNativeDriver: true }),
+        ];
+
+        Animated.loop(
+          Animated.stagger(200, animationSequence),
+          { iterations: -1 }
+        ).start();
       };
 
-      setMessages(newMessage as any);
-      setMessage('');
+      animateDots();
+    }, []);
 
-      // Simulate AI response
+    return (
+      <View style={styles.typingIndicator}>
+        <Animated.View style={[styles.typingDot, { opacity: dot1 }]} />
+        <Animated.View style={[styles.typingDot, { opacity: dot2 }]} />
+        <Animated.View style={[styles.typingDot, { opacity: dot3 }]} />
+      </View>
+    );
+  };
+
+  const sendMessage = async () => {
+    if (!message.trim() || isLoading) {
+      return;
+    }
+    
+    if (!selectedChat || !selectedModel || !user) {
+      return;
+    }
+
+    try {
+      const userMessage = message.trim();    
+      setMessage('');    
+      setIsLoading(true);
+      
+      // Include createdAt timestamp for user message
+      const userMessageObj = {
+        id: generateUUID(),
+        text: userMessage,
+        content: userMessage,
+        userId: user?.id,
+        messageType: 'user',
+        chatId: selectedChat?.id,
+        model: selectedModel?.id,
+        createdAt: new Date().toISOString(),
+      };
+
+      // Add user message to UI immediately
+      addChatMessage(userMessageObj);
+
+      // Scroll to bottom
       setTimeout(() => {
-        const aiResponse = {
-          id: (Date.now() + 1).toString(),
-          text: `This is a response from ${selectedModel?.name}. I'm here to help you with your question!`,
-          isUser: false,
-          timestamp: new Date(),
-          model: selectedModel?.name,
-        };
-        setMessages(aiResponse as any);
-      }, 1000);
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+
+      // Prepare messages for API - only send last 20 messages for context
+      const apiMessages = messages
+        ?.concat([userMessageObj])
+        .slice(-20) // Take only the last 20 messages
+        .map((msg) => ({
+          role: msg.messageType === 'user' ? 'user' : 'assistant',
+          content: msg.content,
+        }));
+
+      const requestBody = {
+        messages: apiMessages,
+        model: selectedModel?.id,
+        chatId: selectedChat?.id,
+        userId: user.id,
+        messageType: 'user',
+        content: userMessage,
+      };
+
+      let assistantMessageId: any = null;
+      let accumulatedText = '';
+      let eventSource: any = null;
+      
+      // Create EventSource connection with POST data using react-native-sse
+      eventSource = new EventSource(`${apiUrl}/chat/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+          'Accept': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      // Handle message_id events
+      eventSource.addEventListener('message_id', (event: any) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          assistantMessageId = data.messageId;
+          
+          // Include createdAt timestamp for assistant message
+          const assistantMessageObj = {
+            id: assistantMessageId,
+            text: '',
+            content: '',
+            messageType: 'assistant',
+            chatId: selectedChat?.id,
+            model: selectedModel?.id,
+            userId: user.id,
+            createdAt: new Date().toISOString(),
+          };
+          
+          addChatMessage(assistantMessageObj);
+        } catch (parseError) {
+          console.error('Error parsing message_id:', parseError);
+        }
+      });
+
+      // Handle content events
+      eventSource.addEventListener('content', (event: any) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (assistantMessageId && data.content) {
+            accumulatedText += data.content;
+            
+            updateMessage(assistantMessageId, {
+              content: accumulatedText,
+            });
+
+            setTimeout(() => {
+              flatListRef.current?.scrollToEnd({ animated: true });
+            }, 50);
+          }
+        } catch (parseError) {
+          console.error('Error parsing content:', parseError);
+        }
+      });
+
+      // Handle completion
+      eventSource.addEventListener('complete', (event: any) => {
+        eventSource.close();
+        setIsLoading(false);
+      });
+
+      // Handle default message events (fallback)
+      eventSource.addEventListener('message', (event: any) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          switch (data.type) {
+            case 'message_id':
+              assistantMessageId = data.messageId;
+              
+              // Include createdAt timestamp for assistant message (fallback)
+              const assistantMessageObj = {
+                id: assistantMessageId,
+                text: '',
+                content: '',
+                messageType: 'assistant',
+                chatId: selectedChat?.id,
+                model: selectedModel?.id,
+                userId: user.id,
+                createdAt: new Date().toISOString(),
+              };
+              
+              addChatMessage(assistantMessageObj);
+              break;
+              
+            case 'content':
+              if (assistantMessageId && data.content) {
+                accumulatedText += data.content;
+                
+                updateMessage(assistantMessageId, {
+                  content: accumulatedText,
+                });
+
+                setTimeout(() => {
+                  flatListRef.current?.scrollToEnd({ animated: true });
+                }, 50);
+              }
+              break;
+              
+            case 'complete':
+              eventSource.close();
+              setIsLoading(false);
+              break;
+              
+            case 'error':
+              throw new Error(data.message || 'API error occurred');
+          }
+        } catch (parseError) {
+          console.error('Error parsing message:', parseError);
+        }
+      });
+
+      // Handle errors
+      eventSource.addEventListener('error', (event: any) => {
+        console.error('SSE error:', event);
+        
+        if (eventSource) {
+          eventSource.close();
+        }
+        
+        if (assistantMessageId) {
+          updateMessage(assistantMessageId, {
+            content: 'Sorry, I encountered an error. Please try again.',
+          });
+        } else {
+          // Include createdAt timestamp for error message
+          const errorMessageObj = {
+            id: generateUUID(),
+            text: 'Sorry, I encountered an error. Please try again.',
+            content: 'Sorry, I encountered an error. Please try again.',
+            messageType: 'assistant',
+            chatId: selectedChat?.id,
+            model: selectedModel?.id,
+            userId: user.id,
+            error: true,
+            createdAt: new Date().toISOString(),
+          };
+          addChatMessage(errorMessageObj);
+        }
+        
+        setIsLoading(false);
+      });
+
+      // Set a timeout as fallback
+      const timeout = setTimeout(() => {
+        if (eventSource) {
+          eventSource.close();
+          
+          if (assistantMessageId) {
+            updateMessage(assistantMessageId, {
+              content: accumulatedText || 'Response timeout. Please try again.',
+            });
+          }
+          setIsLoading(false);
+        }
+      }, 60000);
+
+      // Clean up timeout when stream completes
+      const originalClose = eventSource.close;
+      eventSource.close = function() {
+        clearTimeout(timeout);
+        originalClose.call(this);
+      };
+
+    } catch (error: any) {
+      console.error('Error in sendMessage:', error);
+      
+      // Include createdAt timestamp for error message
+      const errorMessageObj = {
+        id: generateUUID(),
+        text: 'Sorry, I encountered an error. Please try again.',
+        content: 'Sorry, I encountered an error. Please try again.',
+        messageType: 'assistant',
+        chatId: selectedChat?.id,
+        model: selectedModel?.id,
+        userId: user.id,
+        error: true,
+        createdAt: new Date().toISOString(),
+      };
+      addChatMessage(errorMessageObj);
+      
+      Alert.alert(
+        'Error',
+        `Failed to send message: ${error.message}`,
+        [{ text: 'OK' }]
+      );
+      setIsLoading(false);
     }
   };
 
@@ -84,58 +373,94 @@ export default function ChatPage() {
     closeModelSelector();
   };
 
-  const formatTime = (timestamp: Date) => {
-    if(timestamp) {
+  const formatTime = React.useCallback((timestamp: Date) => {
+    if (timestamp) {
       return new Date(timestamp).toLocaleTimeString([], {
         hour: '2-digit',
         minute: '2-digit',
       });
     }
-    return 'Null'
-  };
+    return '';
+  }, []);
 
-  const renderMessage = ({ item, index }: { item: any; index: number }) => (
-    <View
-      style={[
-        styles.messageContainer,
-        item.isUser ? styles.userMessageContainer : styles.aiMessageContainer,
-      ]}>
-      {!item.isUser && (
-        <View style={styles.aiHeader}>
-          <View style={[styles.modelBadge]}>
-            <CustomText style={[styles.modelText]}>
-              {selectedModel?.name}
-            </CustomText>
+  const renderMessage = ({ item, index }: { item: any; index: number }) => {
+    const isUser = item.messageType === 'user';
+
+    return (
+      <View
+        style={[
+          styles.messageContainer,
+          isUser ? styles.userMessageContainer : styles.aiMessageContainer,
+        ]}
+      >
+        {!isUser && (
+          <View style={styles.aiHeader}>
+            <View style={styles.aiAvatarContainer}>
+              <Image 
+                source={{ uri: selectedModel?.icon }} 
+                style={styles.aiAvatar}
+              />
+            </View>
+            <View style={styles.modelBadge}>
+              <CustomText style={styles.modelText}>
+                {selectedModel?.name}
+              </CustomText>
+            </View>
           </View>
+        )}
+
+        <View style={[
+          styles.messageBubble, 
+          isUser ? styles.userMessage : styles.aiMessage
+        ]}>
+          {item.content ? (
+            <CustomText
+              style={[
+                styles.messageText, 
+                isUser ? styles.userMessageText : styles.aiMessageText
+              ]}
+            >
+              {item.content}
+            </CustomText>
+          ) : !isUser && !item.error ? (
+            <TypingIndicator />
+          ) : null}
         </View>
-      )}
 
-      <View style={[styles.messageBubble, item.isUser ? styles.userMessage : styles.aiMessage]}>
-        <CustomText
-          style={[styles.messageText, item.isUser ? styles.userMessageText : styles.aiMessageText]}>
-          {item.text}
-        </CustomText>
+        <View style={[
+          styles.messageFooter,
+          isUser ? styles.userMessageFooter : styles.aiMessageFooter
+        ]}>
+          <CustomText style={styles.timestamp}>
+            {formatTime(item?.createdAt)}
+          </CustomText>
+          {isUser && (
+            <Ionicons 
+              name="checkmark-done" 
+              size={16} 
+              color="#4C63D2" 
+              style={styles.readStatus}
+            />
+          )}
+        </View>
       </View>
-
-      <CustomText
-        style={[styles.timestamp, item.isUser ? styles.userTimestamp : styles.aiTimestamp]}>
-        {formatTime(item?.timestamp)}
-      </CustomText>
-    </View>
-  );
+    );
+  };
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <StatusBar barStyle="light-content" backgroundColor="#1F2937" />
 
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => router.back()}
           style={styles.backButton}
-          activeOpacity={0.8}>
+          activeOpacity={0.8}
+        >
           <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
 
@@ -144,7 +469,8 @@ export default function ChatPage() {
           <TouchableOpacity
             onPress={openModelSelector}
             style={styles.modelSelector}
-            activeOpacity={0.8}>
+            activeOpacity={0.8}
+          >
             <Image source={{ uri: selectedModel?.icon }} style={styles.modelIcon} />
             <CustomText style={styles.modelName}>{selectedModel?.name}</CustomText>
             <Ionicons name="chevron-down" size={16} color="#E5E7EB" />
@@ -158,16 +484,66 @@ export default function ChatPage() {
 
       {/* Messages */}
       <View style={styles.messagesContainer}>
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          renderItem={renderMessage}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.messagesList}
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
-        />
+        {messages && messages.length > 0 ? (
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            renderItem={renderMessage}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.messagesList}
+            showsVerticalScrollIndicator={false}
+            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+            onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          />
+        ) : (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyStateIconContainer}>
+              <Ionicons name="chatbubbles-outline" size={80} color="#D1D5DB" />
+            </View>
+            <CustomText style={styles.emptyStateTitle}>Start a conversation</CustomText>
+            <CustomText style={styles.emptyStateSubtitle}>
+              Ask me anything! I'm here to help with questions, creative tasks, analysis, and more.
+            </CustomText>
+            
+            <View style={styles.suggestionsContainer}>
+              <TouchableOpacity 
+                style={styles.suggestionChip}
+                onPress={() => setMessage("What can you help me with?")}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="help-circle-outline" size={18} color="#4C63D2" />
+                <CustomText style={styles.suggestionText}>What can you help me with?</CustomText>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.suggestionChip}
+                onPress={() => setMessage("Write a creative story")}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="create-outline" size={18} color="#4C63D2" />
+                <CustomText style={styles.suggestionText}>Write a creative story</CustomText>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.suggestionChip}
+                onPress={() => setMessage("Explain a complex topic")}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="school-outline" size={18} color="#4C63D2" />
+                <CustomText style={styles.suggestionText}>Explain a complex topic</CustomText>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.suggestionChip}
+                onPress={() => setMessage("Help me brainstorm ideas")}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="bulb-outline" size={18} color="#4C63D2" />
+                <CustomText style={styles.suggestionText}>Help me brainstorm ideas</CustomText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
 
       {/* Input Area */}
@@ -183,16 +559,35 @@ export default function ChatPage() {
             placeholderTextColor="#9CA3AF"
             value={message}
             onChangeText={setMessage}
+            onFocus={() => setIsInputFocused(true)}
+            onBlur={() => setIsInputFocused(false)}
             multiline
             maxLength={1000}
+            editable={!isLoading}
           />
 
           <TouchableOpacity
             onPress={sendMessage}
-            style={[styles.sendButton, { backgroundColor: message.trim() ? '#4C63D2' : '#E5E7EB' }]}
+            style={[
+              styles.sendButton,
+              {
+                backgroundColor: message?.trim() && !isLoading ? '#4C63D2' : '#E5E7EB',
+              },
+            ]}
             activeOpacity={0.8}
-            disabled={!message.trim()}>
-            <Ionicons name="send" size={20} color={message.trim() ? '#FFFFFF' : '#9CA3AF'} />
+            disabled={!message?.trim() || isLoading}
+          >
+            {isLoading ? (
+              <Animated.View style={styles.loadingSpinner}>
+                <Ionicons name="ellipsis-horizontal" size={20} color="#9CA3AF" />
+              </Animated.View>
+            ) : (
+              <Ionicons
+                name="send"
+                size={20}
+                color={message?.trim() ? '#FFFFFF' : '#9CA3AF'}
+              />
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -202,9 +597,10 @@ export default function ChatPage() {
         visible={modelModalVisible}
         transparent
         animationType="none"
-        onRequestClose={closeModelSelector}>
+        onRequestClose={closeModelSelector}
+      >
         <Pressable style={styles.modalOverlay} onPress={closeModelSelector}>
-          <ScrollView style={[styles.modelModal, ]}>
+          <ScrollView style={[styles.modelModal]}>
             <View style={styles.modalHeader}>
               <CustomText style={styles.modalTitle}>Select AI Model</CustomText>
               <TouchableOpacity onPress={closeModelSelector}>
@@ -220,14 +616,14 @@ export default function ChatPage() {
                   selectedModel?.id === model?.id && styles.selectedModelOption,
                 ]}
                 onPress={() => selectModel(model)}
-                activeOpacity={0.8}>
+                activeOpacity={0.8}
+              >
                 <Image source={{ uri: model?.icon }} style={styles.modelOptionIcon} />
                 <View style={styles.modelInfo}>
                   <CustomText style={styles.modelOptionName}>{model.name}</CustomText>
-                  {/* <CustomText style={styles.modelOptionDescription}>{model?.description}</CustomText> */}
                 </View>
                 {selectedModel?.id === model?.id && (
-                  <Ionicons name="checkmark-circle" size={24}/>
+                  <Ionicons name="checkmark-circle" size={24} color="#4C63D2" />
                 )}
               </TouchableOpacity>
             ))}
@@ -241,7 +637,7 @@ export default function ChatPage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F8FAFC',
   },
   header: {
     flexDirection: 'row',
@@ -249,14 +645,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 60 : (StatusBar?.currentHeight ?? 0 + 20),
     paddingBottom: 16,
-    backgroundColor: '#000000',
+    backgroundColor: '#1F2937',
     borderBottomWidth: 1,
-    borderBottomColor: '#1F2937',
+    borderBottomColor: '#374151',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -274,7 +675,7 @@ const styles = StyleSheet.create({
   modelSelector: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
@@ -283,6 +684,7 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     marginRight: 8,
+    borderRadius: 10,
   },
   modelName: {
     fontSize: 14,
@@ -291,9 +693,9 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   menuButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -307,27 +709,43 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   messageContainer: {
-    marginBottom: 16,
+    marginBottom: 20,
     maxWidth: '85%',
   },
   userMessageContainer: {
     alignSelf: 'flex-end',
+    alignItems: 'flex-end',
   },
   aiMessageContainer: {
     alignSelf: 'flex-start',
+    alignItems: 'flex-start',
   },
   aiHeader: {
-    marginBottom: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  aiAvatarContainer: {
+    marginRight: 8,
+  },
+  aiAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#E5E7EB',
   },
   modelBadge: {
-    alignSelf: 'flex-start',
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(76, 99, 210, 0.1)',
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(76, 99, 210, 0.2)',
   },
   modelText: {
     fontSize: 12,
     fontWeight: '600',
+    color: '#4C63D2',
   },
   messageBubble: {
     borderRadius: 20,
@@ -338,6 +756,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   userMessage: {
     backgroundColor: '#4C63D2',
@@ -360,26 +780,49 @@ const styles = StyleSheet.create({
   aiMessageText: {
     color: '#1F2937',
   },
+  messageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  userMessageFooter: {
+    justifyContent: 'flex-end',
+  },
+  aiMessageFooter: {
+    justifyContent: 'flex-start',
+  },
   timestamp: {
     fontSize: 12,
     fontWeight: '500',
-    marginTop: 4,
-  },
-  userTimestamp: {
     color: '#9CA3AF',
-    textAlign: 'right',
   },
-  aiTimestamp: {
-    color: '#9CA3AF',
-    textAlign: 'left',
+  readStatus: {
+    marginLeft: 6,
+  },
+  typingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  typingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#9CA3AF',
+    marginHorizontal: 3,
   },
   inputContainer: {
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 12,
+    paddingVertical: 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -388,13 +831,13 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     paddingHorizontal: 4,
     paddingVertical: 4,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#E5E7EB',
   },
   attachButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -402,17 +845,26 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: '#1F2937',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     maxHeight: 120,
-    minHeight: 40,
+    minHeight: 44,
+    textAlignVertical: 'center',
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#4C63D2',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  loadingSpinner: {
+    // You can add rotation animation here if needed
   },
   modalOverlay: {
     flex: 1,
@@ -460,6 +912,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     marginRight: 12,
+    borderRadius: 16,
   },
   modelInfo: {
     flex: 1,
@@ -470,9 +923,64 @@ const styles = StyleSheet.create({
     color: '#1F2937',
     marginBottom: 2,
   },
-  modelOptionDescription: {
-    fontSize: 14,
-    color: '#6B7280',
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    paddingVertical: 40,
+  },
+  emptyStateIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  emptyStateTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1F2937',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  emptyStateSubtitle: {
+    fontSize: 16,
     fontWeight: '400',
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+    maxWidth: 280,
+  },
+  suggestionsContainer: {
+    width: '100%',
+    gap: 12,
+  },
+  suggestionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  suggestionText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#374151',
+    marginLeft: 10,
+    flex: 1,
   },
 });

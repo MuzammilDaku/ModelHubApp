@@ -37,7 +37,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: Platform.OS === 'ios' ? 60 : (StatusBar?.currentHeight ?? 0) + 20,
     paddingBottom: 20,
-    backgroundColor: '#000000',
+    backgroundColor: '#1F2937',
   },
   headerContent: {
     flex: 1,
@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
   searchContainer: {
     paddingHorizontal: 24,
     paddingBottom: 20,
-    backgroundColor: '#000000',
+    backgroundColor: '#1F2937',
   },
   searchBar: {
     flexDirection: 'row',
