@@ -33,6 +33,7 @@ export default function Login() {
         router.replace('/(auth)/verify-email');
       }
     } catch (error: { code?: string } | any) {
+      console.log("error",error);
       if (error) {
         alert('Invalid Credentials');
       }

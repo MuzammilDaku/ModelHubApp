@@ -10,7 +10,6 @@ import { useProfileStore } from "store/profile/store";
 export default function Welcome() {
   const appLoading = useProfileStore((state)=>state.appLoading)
   const router = useRouter();
-  console.log(appLoading)
   return (
     <>
       {appLoading && <ActivityIndicator size="large" color="#0000ff" style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, zIndex: 9999 }} />}

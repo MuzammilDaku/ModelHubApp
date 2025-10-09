@@ -1,7 +1,9 @@
 import React from 'react';
-import { View, StyleSheet, Animated, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Animated, TouchableOpacity, Platform, Dimensions } from 'react-native';
 import { CustomText } from 'components/Text';
 import { Ionicons } from '@expo/vector-icons';
+
+const { height: screenHeight } = Dimensions.get('window');
 
 const EmptyChatsState = ({ onCreateChat }:{onCreateChat:any}) => {
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
@@ -76,6 +78,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 32,
     paddingBottom: 120, // Account for FAB
+    // Ensure proper centering on all screen sizes
+    minHeight: screenHeight * 0.6, // Minimum height for smaller screens
+    // Add safe area handling for Android
+    paddingTop: Platform.OS === 'android' ? 40 : 20,
   },
   content: {
     alignItems: 'center',

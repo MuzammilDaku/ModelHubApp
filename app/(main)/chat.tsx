@@ -502,33 +502,80 @@ export default function ChatPage() {
         animationType="none"
         onRequestClose={closeModelSelector}>
         <Pressable style={styles.modalOverlay} onPress={closeModelSelector}>
-          <ScrollView style={[styles.modelModal]}>
+          <Animated.View style={[styles.modelModal, { transform: [{ scale: scaleAnim }] }]}>
             <View style={styles.modalHeader}>
-              <CustomText style={styles.modalTitle}>Select AI Model</CustomText>
-              <TouchableOpacity onPress={closeModelSelector}>
-                <Ionicons name="close" size={24} color="#6B7280" />
+              <View>
+                <CustomText style={styles.modalTitle}>Select AI Model</CustomText>
+                <CustomText style={styles.modalSubtitle}>{models?.length || 0} models available</CustomText>
+              </View>
+              <TouchableOpacity onPress={closeModelSelector} style={styles.closeButton}>
+                <Ionicons name="close-circle" size={28} color="#9CA3AF" />
               </TouchableOpacity>
             </View>
 
-            {models?.map((model, index) => (
-              <TouchableOpacity
-                key={model.id}
-                style={[
-                  styles.modelOption,
-                  selectedModel?.id === model?.id && styles.selectedModelOption,
-                ]}
-                onPress={() => selectModel(model)}
-                activeOpacity={0.8}>
-                <Image source={{ uri: model?.icon }} style={styles.modelOptionIcon} />
-                <View style={styles.modelInfo}>
-                  <CustomText style={styles.modelOptionName}>{model.name}</CustomText>
-                </View>
-                {selectedModel?.id === model?.id && (
-                  <Ionicons name="checkmark-circle" size={24} color="#4C63D2" />
-                )}
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+            <ScrollView style={styles.modelsScrollView} showsVerticalScrollIndicator={false}>
+              {models?.map((model, index) => (
+                <TouchableOpacity
+                  key={model.id}
+                  style={[
+                    styles.modelOption,
+                    selectedModel?.id === model?.id && styles.selectedModelOption,
+                  ]}
+                  onPress={() => selectModel(model)}
+                  activeOpacity={0.7}>
+                  {/* Selection Indicator */}
+                  {selectedModel?.id === model?.id && (
+                    <View style={styles.selectedIndicator} />
+                  )}
+                  
+                  {/* Model Icon with Badge */}
+                  <View style={styles.modelIconWrapper}>
+                    <View style={styles.iconGlow}>
+                      <Image source={{ uri: model?.icon }} style={styles.modelOptionIcon} />
+                    </View>
+                    {selectedModel?.id === model?.id && (
+                      <View style={styles.selectedBadge}>
+                        <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Model Info */}
+                  <View style={styles.modelInfo}>
+                    <CustomText style={styles.modelOptionName}>{model.name}</CustomText>
+                    <CustomText style={styles.modelDescription} numberOfLines={1}>
+                      {model.description || 'Advanced AI language model'}
+                    </CustomText>
+                    
+                    {/* Model Metadata */}
+                    <View style={styles.modelMetaContainer}>
+                      <View style={styles.contextBadge}>
+                        <Ionicons name="documents-outline" size={12} color="#6366F1" />
+                        <CustomText style={styles.contextText}>
+                          {model.context_length > 100000 
+                            ? `${(model.context_length / 1000).toFixed(0)}K tokens` 
+                            : `${model.context_length} tokens`}
+                        </CustomText>
+                      </View>
+                      {model.pricing.prompt === '0' && (
+                        <View style={styles.freeBadge}>
+                          <Ionicons name="star" size={12} color="#F59E0B" />
+                          <CustomText style={styles.freeText}>Free</CustomText>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Selection Arrow */}
+                  <Ionicons 
+                    name={selectedModel?.id === model?.id ? "radio-button-on" : "radio-button-off"} 
+                    size={24} 
+                    color={selectedModel?.id === model?.id ? '#4C63D2' : '#D1D5DB'} 
+                  />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </Animated.View>
         </Pressable>
       </Modal>
     </KeyboardAvoidingView>
@@ -544,7 +591,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 60 : (StatusBar?.currentHeight ?? 0 + 20),
+    paddingTop: Platform.OS === 'ios' ? 60 : (StatusBar?.currentHeight ?? 0) + 20,
     paddingBottom: 16,
     backgroundColor: '#1F2937',
     borderBottomWidth: 1,
@@ -554,6 +601,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 5,
+    // Ensure proper safe area handling
+    minHeight: Platform.OS === 'android' ? 80 : 100,
   },
   backButton: {
     width: 44,
@@ -604,6 +653,8 @@ const styles = StyleSheet.create({
   messagesContainer: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+    // Ensure proper flex behavior on Android
+    minHeight: 0,
   },
   messagesList: {
     padding: 16,
@@ -769,60 +820,159 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modelModal: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
-    width: '85%',
-    maxWidth: 400,
+    borderRadius: 28,
+    padding: 24,
+    width: '90%',
+    maxWidth: 420,
+    maxHeight: '75%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.15,
-    shadowRadius: 25,
-    elevation: 10,
+    shadowOpacity: 0.25,
+    shadowRadius: 30,
+    elevation: 15,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '700',
     color: '#1F2937',
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#9CA3AF',
+  },
+  closeButton: {
+    marginTop: -4,
+  },
+  modelsScrollView: {
+    maxHeight: 400,
   },
   modelOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    marginBottom: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    marginBottom: 12,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   selectedModelOption: {
-    backgroundColor: '#F0F9FF',
-    borderWidth: 2,
+    backgroundColor: '#EEF2FF',
     borderColor: '#4C63D2',
+    shadowColor: '#4C63D2',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  selectedIndicator: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 5,
+    backgroundColor: '#4C63D2',
+    borderTopLeftRadius: 20,
+    borderBottomLeftRadius: 20,
+  },
+  modelIconWrapper: {
+    position: 'relative',
+    marginRight: 14,
+  },
+  iconGlow: {
+    padding: 2,
   },
   modelOptionIcon: {
-    width: 32,
-    height: 32,
-    marginRight: 12,
-    borderRadius: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+  },
+  selectedBadge: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
   modelInfo: {
     flex: 1,
+    marginRight: 12,
   },
   modelOptionName: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     color: '#1F2937',
-    marginBottom: 2,
+    marginBottom: 4,
+  },
+  modelDescription: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: '#6B7280',
+    marginBottom: 8,
+    lineHeight: 18,
+  },
+  modelMetaContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  contextBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  contextText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#6366F1',
+  },
+  freeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  freeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#F59E0B',
   },
   emptyState: {
     flex: 1,
@@ -830,6 +980,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 32,
     paddingVertical: 40,
+    minHeight: '100%',
+    // Ensure proper centering on all screen sizes
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    // Add safe area padding for Android devices
+    paddingTop: Platform.OS === 'android' ? 20 : 0,
+    paddingBottom: Platform.OS === 'android' ? 20 : 0,
   },
   emptyStateIconContainer: {
     width: 120,

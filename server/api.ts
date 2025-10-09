@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-export const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+export const apiUrl = 'https://modelhub-api.vercel.app/api';
 
 export const API = axios.create({
   baseURL: apiUrl,
@@ -51,5 +51,26 @@ const getMessages = async (id:string) => {
   return response.data;
 }
 
+const deleteAllChats = async (userId: string) => {
+  try {
+    const response = await API.delete(`/chat/delete-all`, {
+      data: { userId }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error deleting all chats:', error);
+    throw error;
+  }
+}
 
-export const api = { getFreeModels, createChat ,createUser,getUser,getChats,getMessages};
+const deleteChat = async (chatId: string) => {
+  try {
+    const response = await API.delete(`/chat/${chatId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error deleting chat:', error);
+    throw error;
+  }
+}
+
+export const api = { getFreeModels, createChat ,createUser,getUser,getChats,getMessages, deleteAllChats, deleteChat};

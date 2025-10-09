@@ -1,15 +1,24 @@
 import { CustomText } from 'components/Text';
-import { Platform, StyleSheet, TouchableOpacity, View, StatusBar, TextInput } from 'react-native';
+import { Platform, StyleSheet, TouchableOpacity, View, StatusBar, TextInput, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-export default function Header() {
+const { height: screenHeight } = Dimensions.get('window');
+
+interface HeaderProps {
+  onSettingsPress?: () => void;
+}
+
+export default function Header({ onSettingsPress }: HeaderProps) {
   return (
     <>
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <CustomText style={styles.headerTitle}>Messages</CustomText>
         </View>
-        <TouchableOpacity style={styles.settingsButton} activeOpacity={0.8}>
+        <TouchableOpacity 
+          style={styles.settingsButton} 
+          activeOpacity={0.8}
+          onPress={onSettingsPress}>
           <Ionicons name="settings-outline" size={24} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
@@ -38,6 +47,8 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 60 : (StatusBar?.currentHeight ?? 0) + 20,
     paddingBottom: 20,
     backgroundColor: '#1F2937',
+    // Ensure proper safe area handling for Android
+    minHeight: Platform.OS === 'android' ? 100 : 120,
   },
   headerContent: {
     flex: 1,

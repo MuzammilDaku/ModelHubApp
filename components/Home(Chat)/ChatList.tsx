@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { FlatList, StyleSheet, TouchableOpacity, View, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { chat, useChatStore } from 'store/chats/store';
 import { CustomText } from 'components/Text';
@@ -104,6 +104,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingTop: 8,
     marginTop: -8,
+    // Ensure proper flex behavior on Android
+    minHeight: 0,
   },
   listContent: {
     padding: 20,

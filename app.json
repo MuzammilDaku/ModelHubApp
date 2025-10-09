@@ -15,7 +15,8 @@
       "expo-font",
       "expo-build-properties",
       "expo-web-browser",
-      "expo-router"
+      "expo-router",
+      "expo-splash-screen"
     ],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -23,7 +24,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#000000"
+      "backgroundColor": "#3730a3"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -34,9 +35,9 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#4f46e5"
       },
-      "package": "host.exp.exponent",
+      "package": "com.muzammildaku.modelhub",
       "intentFilters":[
         {
           "action": "VIEW",
